@@ -6,21 +6,11 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
-using System.Runtime.CompilerServices;
 
 namespace FisheryLib;
 
 internal static class UtilityF
 {
-	internal static void ThrowIfNullOrEmpty<T>([NoEnumeration] IEnumerable<T> sequence,
-		[CallerArgumentExpression(nameof(sequence))] string argumentName = "")
-	{
-		Guard.IsNotNull(sequence, argumentName);
-
-		if (!sequence.Any())
-			ThrowHelper.ThrowArgumentException("Sequence contains no elements", argumentName);
-	}
-
 	[DoesNotReturn]
 	[SuppressMessage("Usage", "CA2201")]
 	internal static void Throw(string message) => throw new(message);

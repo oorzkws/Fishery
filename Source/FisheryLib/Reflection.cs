@@ -8,144 +8,23 @@ using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection.Emit;
-using System.Runtime.CompilerServices;
 using System.Security;
 using System.Text;
 using System.Threading.Tasks;
-using FisheryLib.Pools;
 using Verse;
 
 namespace FisheryLib;
 
-[PublicAPI]
+//[PublicAPI]
 public static class Reflection
 {
-	private static Assembly[] _allAssemblies = Array.Empty<Assembly>();
-	private static object _allAssembliesLock = new();
-
-	public static CodeInstructions GetCodeInstructions(Delegate method, ILGenerator? generator = null)
-		=> GetCodeInstructions(method.Method, generator);
-
-	public static CodeInstructions GetCodeInstructions(Expression<Action> method, ILGenerator? generator = null)
-		=> GetCodeInstructions(SymbolExtensions.GetMethodInfo(method), generator);
-	
-	public static CodeInstructions GetCodeInstructions(MethodInfo method, ILGenerator? generator = null)
-		=> PatchProcessor.GetCurrentInstructions(method, generator: generator);
-
-	public static CodeInstructions MakeReplacementCall(Delegate method) => MakeReplacementCall(method.Method);
-
-	public static CodeInstructions MakeReplacementCall(MethodInfo method)
-	{
-		if (!method.IsStatic)
-			yield return FishTranspiler.This;
-
-		foreach (var argument in method.GetParameters())
-			yield return FishTranspiler.Argument(argument);
-
-		yield return FishTranspiler.Call(method);
-		yield return FishTranspiler.Return;
-	}
-
-	public static Assembly[] AllAssemblies
-	{
-		get
-		{
-			lock (_allAssembliesLock)
-			{
-				return _allAssemblies.Length == AppDomain.CurrentDomain.GetAssemblies().Length
-					? _allAssemblies
-					: _allAssemblies = AccessTools.AllAssemblies().ToArray();
-			}
-		}
-	}
-
-	public static Type? Type(string assembly, string typeFullName)
-		=> System.Type.GetType(string.Concat(typeFullName, ", ", assembly));
-
-	public static Type? Type(string assembly, string @namespace, string type)
-		=> System.Type.GetType(StringHelper.Resolve($"{@namespace}.{type}, {assembly}"));
-
-	public static Type? Type(string fullName)
-	{
-		var assemblies = AllAssemblies;
-
-		for (var i = assemblies.Length; i-- > 0;)
-		{
-			if (assemblies[i].GetType(fullName) is { } type)
-				return type;
-		}
-
-		return null;
-	}
-
-	public static MethodInfo MethodInfo<T>(T method) where T : Delegate => method.Method;
-
-	public static MethodInfo? MethodInfo(string assembly, string type, string name, Type[]? parameters = null,
-		Type[]? generics = null)
-		=> AccessTools.Method(Type(assembly, type), name, parameters, generics);
-
-	public static IEnumerable<MethodInfo> MethodsOfName(Type type, string name)
-		=> MethodsOfNameInternal(type, name, true);
-
-	private static void ThrowForMethodsOfName(Type? type, string name)
-		=> ThrowHelper.ThrowArgumentException($"No methods found for {type.FullDescription()}:{name}");
-
-	public static IEnumerable<MethodInfo> MethodsOfNameSilentFail(Type? type, string name)
-		=> MethodsOfNameInternal(type, name, false);
-
-	private static IEnumerable<MethodInfo> MethodsOfNameInternal(Type? type, string name, bool throwWhenEmpty)
-	{
-		var methods = type?.GetMethods(AccessTools.allDeclared);
-		if (methods is null)
-		{
-			if (throwWhenEmpty)
-				ThrowForMethodsOfName(type, name);
-			
-			yield break;
-		}
-
-		var count = 0;
-		for (var i = 0; i < methods.Length; i++)
-		{
-			if (methods[i].Name != name)
-				continue;
-
-			count++;
-			yield return methods[i];
-		}
-		
-		if (throwWhenEmpty && count < 1)
-			ThrowForMethodsOfName(type, name);
-	}
-
-	public static FieldInfo? FieldInfo(string assembly, string type, string name)
-		=> AccessTools.Field(Type(assembly, type), name);
-
-	public static MethodInfo? GetGenericMethod(this Type type, string name, params Type[] typeArguments)
-		=> type.GetMethod(name)?.MakeGenericMethod(typeArguments);
-
-	public static MethodInfo? GetGenericMethod(this Type type, string name, BindingFlags bindingAttr,
-		params Type[] typeArguments)
-		=> type.GetMethod(name, bindingAttr)?.MakeGenericMethod(typeArguments);
-
-	public static bool IsAssignableTo(this Type type, [NotNullWhen(true)] Type? targetType, params Type[] generics)
-	{
-		Guard.IsNotNull(type);
-
-		return targetType != null
-			&& (generics is { Length: >= 1 }
-				? targetType.MakeGenericType(generics)
-				: targetType)
-			.IsAssignableFrom(type);
-	}
-
 	public static bool AreAssignableFrom(this IEnumerable<Type> types, IEnumerable<Type> targetTypes)
 		=> targetTypes.AreAssignableTo(types);
 
 	public static bool AreAssignableTo(this IEnumerable<Type> types, IEnumerable<Type> targetTypes)
 	{
-		Guard.IsNotNull(types);
-		Guard.IsNotNull(targetTypes);
+		if (types is null) throw new ArgumentNullException();
+		if (targetTypes is null) throw new ArgumentNullException();
 
 		using var typesEnumerator = types.GetEnumerator();
 		using var targetTypesEnumerator = targetTypes.GetEnumerator();
@@ -159,89 +38,7 @@ public static class Reflection
 
 		return !targetTypesEnumerator.MoveNext();
 	}
-
-	public static bool IsNullable(this Type type)
-	{
-		Guard.IsNotNull(type);
-
-		return type.IsGenericType
-			&& type.GetGenericTypeDefinition() == typeof(Nullable<>);
-	}
-
-	public static bool IsNullable(this Type nullableType, [NotNullWhen(true)] out Type? valueType)
-	{
-		if (nullableType.IsNullable())
-		{
-			valueType = nullableType.GetGenericArguments()[0];
-			return true;
-		}
-		else
-		{
-			valueType = null;
-			return false;
-		}
-	}
-
-	public static Type GetDelegateReturnType(this Type type)
-	{
-		Guard.IsTypeAssignableToType(type, typeof(Delegate));
-		return type.GetMethod("Invoke")!.ReturnType;
-	}
-
-	public static ParameterInfo[] GetDelegateParameters(this Type type)
-	{
-		Guard.IsTypeAssignableToType(type, typeof(Delegate));
-		return type.GetMethod("Invoke")!.GetParameters();
-	}
-
-	public static bool HasGenericInterfaceDefinition(this Type type, Type interfaceType)
-	{
-		Guard.IsNotNull(type);
-
-		return Array.Exists(type.GetInterfaces(), @interface
-			=> @interface.IsGenericType
-			&& @interface.GetGenericTypeDefinition() == interfaceType);
-	}
-
-	[SecuritySafeCritical]
-	public static IntPtr GetFunctionPointer(this MethodBase method) => method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T> GetFunctionPointer<T>(this MethodBase method)
-		=> (delegate*<T>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T_in, T_out> GetFunctionPointer<T_in, T_out>(this MethodBase method)
-		=> (delegate*<T_in, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T_out> GetFunctionPointer<T1, T2, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T3, T_out> GetFunctionPointer<T1, T2, T3, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T3, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T3, T4, T_out>
-		GetFunctionPointer<T1, T2, T3, T4, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T3, T4, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T3, T4, T5, T_out>
-		GetFunctionPointer<T1, T2, T3, T4, T5, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T3, T4, T5, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T3, T4, T5, T6, T_out>
-		GetFunctionPointer<T1, T2, T3, T4, T5, T6, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T3, T4, T5, T6, T_out>)method.MethodHandle.GetFunctionPointer();
-
-	[SecuritySafeCritical]
-	public static unsafe delegate*<T1, T2, T3, T4, T5, T6, T7, T_out>
-		GetFunctionPointer<T1, T2, T3, T4, T5, T6, T7, T_out>(this MethodBase method)
-		=> (delegate*<T1, T2, T3, T4, T5, T6, T7, T_out>)method.MethodHandle.GetFunctionPointer();
-
+	
 	/// <summary>
 	/// Finds a constructor with parameters that are either assignable to or assignable from the types in the provided
 	/// parameters array
@@ -259,7 +56,7 @@ public static class Reflection
 	public static ConstructorInfo? MatchingConstructor(Type type, Type[]? parameters = null,
 		bool searchForStatic = false, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		parameters ??= Array.Empty<Type>();
 		var flags = searchForStatic ? AccessTools.all & ~BindingFlags.Instance : AccessTools.all & ~BindingFlags.Static;
@@ -267,7 +64,7 @@ public static class Reflection
 		return TryGetConstructor(type, flags, paramTypes => paramTypes.AreAssignableFrom(parameters))
 			?? TryGetConstructor(type, flags, paramTypes => paramTypes.AreAssignableTo(parameters))
 			?? (throwOnFailure
-				? ThrowHelper.ThrowInvalidOperationException<ConstructorInfo>(
+				? throw new InvalidOperationException(
 					$"No constructor found for type: {type}, parameters: {
 						parameters.ToStringSafeEnumerable()}, static: {searchForStatic}, found constructors: {
 						type.GetConstructors(flags).ToStringSafeEnumerable()}")
@@ -278,70 +75,7 @@ public static class Reflection
 		Predicate<IEnumerable<Type>> predicate)
 		=> type.GetConstructors(flags).FirstOrDefault(c
 			=> predicate(c.GetParameters().Select(static p => p.ParameterType)));
-
-	public static T? CreateConstructorDelegate<T>(Type type, params Type[] parameters) where T : Delegate
-	{
-		try
-		{
-			Guard.IsTypeAssignableToType(typeof(T), typeof(Delegate));
-			var delegateReturnType = typeof(T).GetDelegateReturnType();
-
-			var dm = new DynamicMethod($"FisheryConstructorFunc_{type.Name}{parameters.Length.ToString()}",
-				delegateReturnType, parameters, type, true);
-			var il = dm.GetILGenerator();
 	
-			var needsTempVar = type.IsValueType
-				&& parameters.Length == 0
-				&& !Array.Exists(type.GetConstructors(AccessTools.allDeclared & ~BindingFlags.Static),
-					static c => c.GetParameters().Length == 0);
-		
-			var tempVariable = needsTempVar ? FishTranspiler.NewLocalVariable(type, il) : default;
-	
-			if (needsTempVar)
-				il.Emit(tempVariable.Load().Address());
-	
-			for (var i = 0; i < parameters.Length; i++)
-				il.Emit(FishTranspiler.Argument(i));
-	
-			il.Emit(FishTranspiler.New(type, parameters));
-	
-			if (needsTempVar)
-				il.Emit(tempVariable.Load());
-
-			if (delegateReturnType != type)
-			{
-				if (type.IsValueType
-					&& (delegateReturnType == typeof(object)
-					|| (delegateReturnType.IsInterface && type.IsAssignableTo(delegateReturnType))))
-				{
-					il.Emit(FishTranspiler.Box(type));
-				}
-				else if (delegateReturnType != typeof(IConvertible)
-					&& delegateReturnType.IsAssignableTo(typeof(IConvertible))
-					&& type.IsAssignableTo(typeof(IConvertible)))
-				{
-					il.Emit(FishTranspiler.Call(Array.Find(typeof(Convert).GetMethods(),
-							static m => m.GetParameters().Length == 1 && m.Name == "Type")
-						.MakeGenericMethod(type, delegateReturnType)));
-				}
-				else if (!type.IsAssignableTo(delegateReturnType))
-				{
-					il.Emit(FishTranspiler.Cast(delegateReturnType));
-				}
-			}
-
-			il.Emit(FishTranspiler.Return);
-	
-			return (T)dm.CreateDelegate(typeof(T));
-		}
-		catch (Exception e)
-		{
-			Log.Error($"Failed creating a constructor delegate for {type.FullDescription()} with parameters {
-				parameters.ToStringSafeEnumerable()}\n{e}\n{new StackTrace()}");
-			return null;
-		}
-	}
-
 	[SecuritySafeCritical]
 	public static string FullDescription(this MemberInfo? memberInfo)
 		=> memberInfo switch
@@ -355,9 +89,8 @@ public static class Reflection
 	{
 		if (memberInfo is null)
 			return "NULL";
-
-		using var pooledStringBuilder = new PooledStringBuilder();
-		var stringBuilder = pooledStringBuilder.Builder;
+		
+		var stringBuilder = new StringBuilder();
 
 		switch (memberInfo)
 		{
@@ -380,7 +113,7 @@ public static class Reflection
 		if (memberInfo is PropertyInfo propertyInfo1)
 			AppendPropertyPostfix(stringBuilder, propertyInfo1);
 
-		return pooledStringBuilder.ToString();
+		return stringBuilder.ToString();
 	}
 
 	private static void AppendFieldPrefix(FieldInfo fieldInfo, StringBuilder stringBuilder)
@@ -460,133 +193,4 @@ public static class Reflection
 
 	private static StringBuilder AppendType(this StringBuilder stringBuilder, Type type)
 		=> stringBuilder.Append(type.FullDescription());
-
-	private static T CreateInstanceUsingActivator<T>(params object?[] args)
-		=> (T)Activator.CreateInstance(typeof(T),
-			BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.CreateInstance, null,
-			args, null, null);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T New<T>() => Create<T>.@new();
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T_result New<T_result, T_argument>(T_argument argument)
-		=> Create<T_result, T_argument>.@new(argument);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T_result New<T_result, T1, T2>(T1 arg1, T2 arg2) => Create<T_result, T1, T2>.@new(arg1, arg2);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T_result New<T_result, T1, T2, T3>(T1 arg1, T2 arg2, T3 arg3)
-		=> Create<T_result, T1, T2, T3>.@new(arg1, arg2, arg3);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T_result New<T_result, T1, T2, T3, T4>(T1 arg1, T2 arg2, T3 arg3, T4 arg4)
-		=> Create<T_result, T1, T2, T3, T4>.@new(arg1, arg2, arg3, arg4);
-
-	[MethodImpl(MethodImplOptions.AggressiveInlining)]
-	public static T_result New<T_result, T1, T2, T3, T4, T5>(T1 arg1, T2 arg2, T3 arg3, T4 arg4, T5 arg5)
-		=> Create<T_result, T1, T2, T3, T4, T5>.@new(arg1, arg2, arg3, arg4, arg5);
-
-	private static class Create<T>
-	{
-		internal static volatile Func<T> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static T SimpleFunc() => (T)Activator.CreateInstance(typeof(T), true);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<T>>(typeof(T), Array.Empty<Type>()) is { } newFunc)
-				@new = newFunc;
-		}
-	}
-
-	private static class Create<TResult, TArgument>
-	{
-		internal static volatile Func<TArgument, TResult> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static TResult SimpleFunc(TArgument argument) => CreateInstanceUsingActivator<TResult>(argument);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<TArgument, TResult>>(typeof(TResult), typeof(TArgument)) is { } newFunc)
-				@new = newFunc;
-		}
-	}
-
-	private static class Create<TResult, T1, T2>
-	{
-		internal static volatile Func<T1, T2, TResult> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static TResult SimpleFunc(T1 first, T2 second) => CreateInstanceUsingActivator<TResult>(first, second);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<T1, T2, TResult>>(typeof(TResult), typeof(T1), typeof(T2)) is { } newFunc)
-				@new = newFunc;
-		}
-	}
-
-	private static class Create<TResult, T1, T2, T3>
-	{
-		internal static volatile Func<T1, T2, T3, TResult> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static TResult SimpleFunc(T1 first, T2 second, T3 third)
-			=> CreateInstanceUsingActivator<TResult>(first, second, third);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<T1, T2, T3, TResult>>(typeof(TResult), typeof(T1), typeof(T2), typeof(T3))
-				is { } newFunc)
-			{
-				@new = newFunc;
-			}
-		}
-	}
-
-	private static class Create<TResult, T1, T2, T3, T4>
-	{
-		internal static volatile Func<T1, T2, T3, T4, TResult> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static TResult SimpleFunc(T1 first, T2 second, T3 third, T4 fourth)
-			=> CreateInstanceUsingActivator<TResult>(first, second, third, fourth);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<T1, T2, T3, T4, TResult>>(typeof(TResult), typeof(T1), typeof(T2), typeof(T3),
-				typeof(T4)) is { } newFunc)
-			{
-				@new = newFunc;
-			}
-		}
-	}
-
-	private static class Create<TResult, T1, T2, T3, T4, T5>
-	{
-		internal static volatile Func<T1, T2, T3, T4, T5, TResult> @new = SimpleFunc;
-
-		static Create() => Task.Run(ConstructorTask);
-
-		private static TResult SimpleFunc(T1 first, T2 second, T3 third, T4 fourth, T5 fifth)
-			=> CreateInstanceUsingActivator<TResult>(first, second, third, fourth, fifth);
-
-		private static void ConstructorTask()
-		{
-			if (CreateConstructorDelegate<Func<T1, T2, T3, T4, T5, TResult>>(typeof(TResult), typeof(T1), typeof(T2),
-				typeof(T3), typeof(T4), typeof(T5)) is { } newFunc)
-			{
-				@new = newFunc;
-			}
-		}
-	}
 }

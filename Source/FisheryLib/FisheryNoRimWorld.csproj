@@ -1,0 +1,45 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+    <PropertyGroup>
+        <ElinGamePath>A:\SteamLibrary\steamapps\common\Elin</ElinGamePath>
+        <!--<AssemblySearchPaths>$(ElinGamePath)\Elin_Data\Managed;$(ElinGamePath)\BepInEx\core;$(MSBuildProjectDirectory)</AssemblySearchPaths>-->
+        <AssemblyName>1Fishery</AssemblyName>
+        <OutputPath>$(MSBuildProjectDirectory)\Assemblies\</OutputPath>
+        <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+        <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>netstandard2.1</TargetFramework>
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <Nullable>enable</Nullable>
+        <LangVersion>13.0</LangVersion>
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <Optimize>true</Optimize>
+        <DebugSymbols>false</DebugSymbols>
+        <DebugType>none</DebugType>
+        <RestoreAdditionalProjectSources>
+            https://api.nuget.org/v3/index.json;
+            https://nuget.bepinex.dev/v3/index.json;
+            https://nuget.samboy.dev/v3/index.json
+        </RestoreAdditionalProjectSources>
+        <!-- Using nuget packages results in IgnoresAccessChecksToAttribute being duplicated between Publicizer and MonoMod.Utils -->
+        <NoWarn>0436</NoWarn>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="BepInEx.Unity" Version="6.0.0-pre.1" IncludeAssets="compile" />
+        <PackageReference Include="UnityEngine.Modules" Version="2021.3.34" IncludeAssets="compile" />
+    </ItemGroup>
+    <ItemGroup Condition="'$(TargetFramework.TrimEnd(`0123456789`))' == 'net'">
+        <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies" Version="1.0.2" PrivateAssets="all" />
+    </ItemGroup>
+    
+    <ItemGroup>
+        <Reference Include="0Harmony" Private="False" />
+        <Reference Include="UnityEngine.CoreModule" Private="False" Aliases="UnityCore" HintPath="$(ElinGamePath)\Elin_Data\Managed\UnityEngine.CoreModule.dll"/>
+        <PackageReference Include="Krafs.Publicizer" Version="*">
+            <PrivateAssets>all</PrivateAssets>
+            <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
+        <Publicize Include="0Harmony" />
+    </ItemGroup>
+</Project>

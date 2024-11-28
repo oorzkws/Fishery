@@ -5,20 +5,22 @@
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
-using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection.Emit;
 using System.Security;
 using Verse;
 
+// ReSharper disable IdentifierTypo
+// ReSharper disable CommentTypo
+// Resharper disable StringLiteralTypo
 // ReSharper disable PossibleMultipleEnumeration
 
 namespace FisheryLib;
 
-[PublicAPI]
+//[PublicAPI]
 public static class FishTranspiler
 {
-	[PublicAPI]
+	//[PublicAPI]
 	public readonly struct Container : IEquatable<Container>, IEquatable<CodeInstruction>
 	{
 		public Container(OpCode opcode, object? operand = null)
@@ -29,7 +31,7 @@ public static class FishTranspiler
 
 		public Container(CodeInstruction instruction)
 		{
-			Guard.IsNotNull(instruction, nameof(instruction));
+			if (instruction is null) throw new ArgumentNullException(nameof(instruction));
 
 			OpCode = instruction.opcode;
 			Operand = instruction.operand;
@@ -58,7 +60,7 @@ public static class FishTranspiler
 				: new(OpCode.LoadsField() || OpCode.StoresField() ? OpCode.ToStoreField()
 					: OpCode.LoadsLocalVariable() || OpCode.StoresLocalVariable() ? OpCode.ToStoreLocalVariable()
 					: OpCode.StoresArgument() ? OpCode
-					: ThrowHelper.ThrowInvalidOperationException<OpCode>(
+					: throw new InvalidOperationException(
 						$"Cannot determine Store instruction for {OpCode}"),
 					Operand);
 
@@ -68,7 +70,7 @@ public static class FishTranspiler
 				: new(OpCode.LoadsField() || OpCode.StoresField() ? OpCode.ToLoadField()
 					: OpCode.LoadsLocalVariable() || OpCode.StoresLocalVariable() ? OpCode.ToLoadLocalVariable()
 					: OpCode.LoadsArgument() ? OpCode
-					: ThrowHelper.ThrowInvalidOperationException<OpCode>(
+					: throw new InvalidOperationException(
 						$"Cannot determine Load instruction for {OpCode}"),
 					Operand);
 
@@ -87,7 +89,7 @@ public static class FishTranspiler
 		[SecuritySafeCritical]
 		public CodeInstruction WithLabels(IEnumerable<Label> labels)
 		{
-			Guard.IsNotNull(labels);
+			if (labels is null) throw new ArgumentNullException();
 
 			return ToInstruction().WithLabels(labels);
 		}
@@ -98,7 +100,7 @@ public static class FishTranspiler
 		[SecuritySafeCritical]
 		public CodeInstruction WithBlocks(IEnumerable<ExceptionBlock> blocks)
 		{
-			Guard.IsNotNull(blocks);
+			if (blocks is null) throw new ArgumentNullException();
 
 			return ToInstruction().WithBlocks(blocks);
 		}
@@ -110,7 +112,7 @@ public static class FishTranspiler
 		public int GetIndex()
 			=> OpCode.TryGetIndex()
 				?? TryGetIndexFromOperand(Operand)
-				?? ThrowHelper.ThrowArgumentException<int>(
+				?? throw new ArgumentException(
 					$"{OpCode} has operand {Operand}. This is not a supported index.");
 
 		public bool LoadsLocalVariable(MethodBase method, Type localType)
@@ -235,7 +237,7 @@ public static class FishTranspiler
 				: PopsThree() ? 3
 				: OpCode.Calls() ? GetCallPops()
 				: OpCode.Branches() ? GetBranchPops()
-				: ThrowHelper.ThrowNotSupportedException<int>($"OpCode {
+				: throw new NotSupportedException($"OpCode {
 					OpCode} not supported by FishTranspiler.Pops");
 
 		/// <summary>
@@ -246,7 +248,7 @@ public static class FishTranspiler
 				: PushesOne() ? 1
 				: PushesTwo() ? 2
 				: OpCode.Calls() ? GetCallPushes()
-				: ThrowHelper.ThrowNotSupportedException<int>($"OpCode {
+				: throw new NotSupportedException($"OpCode {
 					OpCode} not supported by FishTranspiler.Pushes");
 
 		private bool PopsNone()
@@ -291,7 +293,7 @@ public static class FishTranspiler
 		private int GetCallPops()
 			=> OpCode == OpCodes.Calli
 				|| Operand is not MethodInfo methodInfo
-					? ThrowHelper.ThrowNotSupportedException<int>()
+					? throw new NotSupportedException()
 					: methodInfo.GetParameters().Length + (methodInfo.IsStatic ? 0 : 1);
 
 		private int GetBranchPops()
@@ -340,7 +342,7 @@ public static class FishTranspiler
 
 		private int GetCallPushes()
 			=> OpCode == OpCodes.Calli
-				|| Operand is not MethodInfo methodInfo ? ThrowHelper.ThrowNotSupportedException<int>()
+				|| Operand is not MethodInfo methodInfo ? throw new NotSupportedException()
 				: methodInfo.ReturnType == typeof(void) ? 0
 				: 1;
 	}
@@ -351,7 +353,7 @@ public static class FishTranspiler
 	/// <param name="instruction">The Harmony CodeInstruction to copy</param>
 	public static Container Copy(CodeInstruction instruction)
 	{
-		Guard.IsNotNull(instruction);
+		if (instruction is null) throw new ArgumentNullException();
 
 		return new(instruction);
 	}
@@ -363,8 +365,8 @@ public static class FishTranspiler
 	/// <param name="argumentType">The type to search for</param>
 	public static Container FirstArgument(MethodBase method, Type argumentType)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(argumentType);
+		if (method is null) throw new ArgumentNullException();
+		if (argumentType is null) throw new ArgumentNullException();
 
 		return Argument(FirstArgumentIndex(method, argumentType));
 	}
@@ -376,8 +378,8 @@ public static class FishTranspiler
 	/// <param name="predicate">The predicate to match</param>
 	public static Container FirstArgument(MethodBase method, Func<ParameterInfo, bool> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		return Argument(FirstArgumentIndex(method, predicate));
 	}
@@ -389,8 +391,8 @@ public static class FishTranspiler
 	/// <param name="name">The name of the argument</param>
 	public static Container Argument(MethodBase method, string name)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNullOrEmpty(name);
+		if (method is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		return Argument(FirstArgumentIndex(method, p => p.Name == name));
 	}
@@ -401,7 +403,7 @@ public static class FishTranspiler
 	/// <param name="parameter">The ParameterInfo of the argument</param>
 	public static Container Argument(ParameterInfo parameter)
 	{
-		Guard.IsNotNull(parameter);
+		if (parameter is null) throw new ArgumentNullException();
 
 		return Argument(ArgumentIndex(parameter));
 	}
@@ -419,8 +421,8 @@ public static class FishTranspiler
 	/// <param name="name">The name of the argument</param>
 	public static Container ArgumentAddress(MethodBase method, string name)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNullOrEmpty(name);
+		if (method is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		return ArgumentAddress(FirstArgumentIndex(method, p => p.Name == name));
 	}
@@ -438,8 +440,8 @@ public static class FishTranspiler
 	/// <param name="argumentType">The type to search for</param>
 	public static Container StoreFirstArgument(MethodBase method, Type argumentType)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(argumentType);
+		if (method is null) throw new ArgumentNullException();
+		if (argumentType is null) throw new ArgumentNullException();
 
 		return StoreArgument(FirstArgumentIndex(method, argumentType));
 	}
@@ -451,8 +453,8 @@ public static class FishTranspiler
 	/// <param name="predicate">The predicate to match</param>
 	public static Container StoreFirstArgument(MethodBase method, Func<ParameterInfo, bool> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		return StoreArgument(FirstArgumentIndex(method, predicate));
 	}
@@ -464,8 +466,8 @@ public static class FishTranspiler
 	/// <param name="name">The name of the argument</param>
 	public static Container StoreArgument(MethodBase method, string name)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNullOrEmpty(name);
+		if (method is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		return StoreArgument(FirstArgumentIndex(method, p => p.Name == name));
 	}
@@ -476,7 +478,7 @@ public static class FishTranspiler
 	/// <param name="parameter">The ParameterInfo of the argument</param>
 	public static Container StoreArgument(ParameterInfo parameter)
 	{
-		Guard.IsNotNull(parameter);
+		if (parameter is null) throw new ArgumentNullException();
 
 		return StoreArgument(ArgumentIndex(parameter));
 	}
@@ -495,8 +497,8 @@ public static class FishTranspiler
 	/// <param name="localType">The type of the local variable to search for</param>
 	public static Container FirstLocalVariable(MethodBase method, Type localType)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(localType);
+		if (method is null) throw new ArgumentNullException();
+		if (localType is null) throw new ArgumentNullException();
 
 		return FirstLocalVariable(method, l => l.LocalType == localType);
 	}
@@ -509,13 +511,13 @@ public static class FishTranspiler
 	/// <param name="predicate">The predicate used to identify the local variable</param>
 	public static Container FirstLocalVariable(MethodBase method, Predicate<LocalVariableInfo> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		var locals = MatchingLocalVariables(method, predicate);
 		return locals.Any()
 			? locals.First()
-			: ThrowHelper.ThrowInvalidOperationException<Container>(
+			: throw new InvalidOperationException(
 				$"No local variable found for predicate {predicate.Method.FullDescription()} and method {
 					method.FullDescription()}");
 	}
@@ -528,8 +530,8 @@ public static class FishTranspiler
 	public static IEnumerable<Container> MatchingLocalVariables(MethodBase method,
 		Predicate<LocalVariableInfo> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		foreach (var index in GetLocalIndices(method, predicate))
 			yield return new(GetLoadLocalOpCode(index), GetOperandFromIndex(index));
@@ -543,13 +545,13 @@ public static class FishTranspiler
 	/// <param name="localType">The type of the local variable to search for</param>
 	public static Container FirstLocalVariable(CodeInstructions codes, Type localType)
 	{
-		Guard.IsNotNull(codes);
-		Guard.IsNotNull(localType);
+		if (codes is null) throw new ArgumentNullException();
+		if (localType is null) throw new ArgumentNullException();
 
 		var operands = GetLocalOperandsOrIndices(codes, c => c.Returns(localType));
 		return operands.Any()
 			? LocalVariable(operands.First())
-			: ThrowHelper.ThrowInvalidOperationException<Container>(
+			: throw new InvalidOperationException(
 				$"No local variable found with localType {localType.FullDescription()}");
 	}
 
@@ -559,7 +561,7 @@ public static class FishTranspiler
 	/// <param name="operand">The index or LocalBuilder of the local variable</param>
 	public static Container LocalVariable(object operand)
 	{
-		Guard.IsNotNull(operand);
+		if (operand is null) throw new ArgumentNullException();
 
 		return operand is LocalBuilder builder ? LocalVariable(builder) : LocalVariable((int)operand);
 	}
@@ -571,7 +573,7 @@ public static class FishTranspiler
 	/// <param name="builder">The LocalBuilder of the local variable</param>
 	public static Container LocalVariable(LocalBuilder builder)
 	{
-		Guard.IsNotNull(builder);
+		if (builder is null) throw new ArgumentNullException();
 
 		return new(GetLoadLocalOpCode(builder.LocalIndex), GetOperandFromBuilder(builder));
 	}
@@ -590,8 +592,8 @@ public static class FishTranspiler
 	/// <param name="localType">The type of the local variable to search for</param>
 	public static Container StoreFirstLocalVariable(MethodBase method, Type localType)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(localType);
+		if (method is null) throw new ArgumentNullException();
+		if (localType is null) throw new ArgumentNullException();
 
 		return StoreFirstLocalVariable(method, l => l.LocalType == localType);
 	}
@@ -604,13 +606,13 @@ public static class FishTranspiler
 	/// <param name="predicate">The predicate used to identify the local variable</param>
 	public static Container StoreFirstLocalVariable(MethodBase method, Predicate<LocalVariableInfo> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		var locals = StoreMatchingLocalVariables(method, predicate);
 		return locals.Any()
 			? locals.First()
-			: ThrowHelper.ThrowInvalidOperationException<Container>(
+			: throw new InvalidOperationException(
 				$"No local variable found for predicate {predicate.Method.FullDescription()} and method {method.FullDescription()}");
 	}
 
@@ -623,8 +625,8 @@ public static class FishTranspiler
 	public static IEnumerable<Container> StoreMatchingLocalVariables(MethodBase method,
 		Predicate<LocalVariableInfo> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		foreach (var index in GetLocalIndices(method, predicate))
 			yield return new(GetStoreLocalOpCode(index), GetOperandFromIndex(index));
@@ -638,13 +640,13 @@ public static class FishTranspiler
 	/// <param name="localType">The type of the local variable to search for</param>
 	public static Container StoreFirstLocalVariable(CodeInstructions codes, Type localType)
 	{
-		Guard.IsNotNull(codes);
-		Guard.IsNotNull(localType);
+		if (codes is null) throw new ArgumentNullException();
+		if (localType is null) throw new ArgumentNullException();
 
 		var operands = GetLocalOperandsOrIndices(codes, c => c.Returns(localType));
 		return operands.Any()
 			? StoreLocalVariable(operands.First())
-			: ThrowHelper.ThrowInvalidOperationException<Container>(
+			: throw new InvalidOperationException(
 				$"No local variable found with localType {localType.FullDescription()}");
 	}
 
@@ -655,7 +657,7 @@ public static class FishTranspiler
 	/// <param name="operand">The index or LocalBuilder of the local variable</param>
 	public static Container StoreLocalVariable(object operand)
 	{
-		Guard.IsNotNull(operand);
+		if (operand is null) throw new ArgumentNullException();
 
 		return operand is LocalBuilder builder ? StoreLocalVariable(builder) : StoreLocalVariable((int)operand);
 	}
@@ -667,7 +669,7 @@ public static class FishTranspiler
 	/// <param name="builder">The LocalBuilder of the local variable</param>
 	public static Container StoreLocalVariable(LocalBuilder builder)
 	{
-		Guard.IsNotNull(builder);
+		if (builder is null) throw new ArgumentNullException();
 
 		return new(GetStoreLocalOpCode(builder.LocalIndex), GetOperandFromBuilder(builder));
 	}
@@ -687,8 +689,8 @@ public static class FishTranspiler
 	/// <param name="generator">The ILGenerator used for the instruction stream</param>
 	public static Container NewLocalVariable(Type localType, ILGenerator generator)
 	{
-		Guard.IsNotNull(localType);
-		Guard.IsNotNull(generator);
+		if (localType is null) throw new ArgumentNullException();
+		if (generator is null) throw new ArgumentNullException();
 
 		return NewLocalVariable(localType, generator, false);
 	}
@@ -701,8 +703,8 @@ public static class FishTranspiler
 	/// <param name="generator">The ILGenerator used for the instruction stream</param>
 	public static Container NewFixedLocalVariable(Type localType, ILGenerator generator)
 	{
-		Guard.IsNotNull(localType);
-		Guard.IsNotNull(generator);
+		if (localType is null) throw new ArgumentNullException();
+		if (generator is null) throw new ArgumentNullException();
 
 		return NewLocalVariable(localType, generator, true);
 	}
@@ -785,12 +787,12 @@ public static class FishTranspiler
 			MemberInfo memberInfo => Token(memberInfo),
 			null => Null,
 			IConvertible convertible => Constant(convertible.ToInt32(CultureInfo.InvariantCulture)),
-			_ => ThrowHelper.ThrowArgumentException<Container>(nameof(value),
+			_ => throw new ArgumentException(nameof(value),
 				$"Type {value.GetType()} cannot be used for FishTranspiler.Constant")
 		};
 
 	private static Container InvalidEnumForConstant(Enum e, TypeCode typeCode)
-		=> ThrowHelper.ThrowArgumentException<Container>(
+		=> throw new ArgumentException(
 			$"Tried using Enum {e.GetType().FullDescription()} with underlying Type {
 				Enum.GetUnderlyingType(e.GetType()).FullDescription()} (TypeCode: {
 					typeCode}) for FishTranspiler.Constant.");
@@ -803,7 +805,7 @@ public static class FishTranspiler
 	/// <param name="forceNoCallvirt">force a Call OpCode instead of using Callvirt where appropriate</param>
 	public static Container Call<T>(T method, bool forceNoCallvirt = false) where T : Delegate
 	{
-		Guard.IsNotNull(method);
+		if (method is null) throw new ArgumentNullException();
 
 		return Call(method.Method, forceNoCallvirt);
 	}
@@ -816,7 +818,7 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container Call(Expression<Action> expression, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(expression);
+		if (expression is null) throw new ArgumentNullException();
 
 		return Call(SymbolExtensions.GetMethodInfo(expression), forceNoCallvirt);
 	}
@@ -835,12 +837,12 @@ public static class FishTranspiler
 	public static Container Call(string assembly, string type, string name, Type[]? parameters = null,
 		Type[]? generics = null, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNullOrEmpty(assembly);
-		Guard.IsNotNullOrEmpty(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (string.IsNullOrEmpty(assembly)) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(type)) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		return Call(Type.GetType($"{type}, {assembly}")
-			?? ThrowHelper.ThrowArgumentException<Type>($"No type named {type} found in assembly {assembly}"), name,
+			?? throw new ArgumentException($"No type named {type} found in assembly {assembly}"), name,
 			parameters, generics, forceNoCallvirt);
 	}
 
@@ -858,11 +860,11 @@ public static class FishTranspiler
 	public static Container Call(Type type, string name, Type[]? parameters = null, Type[]? generics = null,
 		bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		return Call(AccessTools.Method(type, name, parameters, generics)
-			?? ThrowHelper.ThrowArgumentException<MethodInfo>($"No method found with type {type}, name {
+			?? throw new ArgumentException($"No method found with type {type}, name {
 				name}{(parameters != null ? $", parameters: {parameters.ToStringSafeEnumerable()}" : "")}{
 					(generics != null ? $", generics: {generics.ToStringSafeEnumerable()}" : "")}"),
 			forceNoCallvirt);
@@ -876,7 +878,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">MethodBase is null</exception>
 	public static Container Call(MethodBase method, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(method);
+		if (method is null) throw new ArgumentNullException();
 
 		return new(method.IsStatic || (method.DeclaringType?.IsValueType ?? false) || forceNoCallvirt
 			? OpCodes.Call
@@ -894,13 +896,13 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container Field(Type type, string name)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		var field = AccessTools.Field(type, name);
 		return field != null
 			? new(field.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, field)
-			: ThrowHelper.ThrowMissingFieldException<Container>(
+			: throw new MissingFieldException(
 				$"FishTranspiler.LoadField failed to find a field at {type.FullDescription()}:{name}");
 	}
 
@@ -912,7 +914,7 @@ public static class FishTranspiler
 	/// <param name="fieldInfo">The FieldInfo</param>
 	public static Container Field(FieldInfo fieldInfo)
 	{
-		Guard.IsNotNull(fieldInfo);
+		if (fieldInfo is null) throw new ArgumentNullException();
 
 		return new(fieldInfo.IsStatic ? OpCodes.Ldsfld : OpCodes.Ldfld, fieldInfo);
 	}
@@ -928,13 +930,13 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container FieldAddress(Type type, string name)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		var field = AccessTools.Field(type, name);
 		return field != null
 			? new(field.IsStatic ? OpCodes.Ldsflda : OpCodes.Ldflda, field)
-			: ThrowHelper.ThrowMissingFieldException<Container>(
+			: throw new MissingFieldException(
 				$"FishTranspiler.LoadFieldAddress failed to find a field at {type.FullDescription()}:{name}");
 	}
 
@@ -946,7 +948,7 @@ public static class FishTranspiler
 	/// <param name="fieldInfo">The FieldInfo</param>
 	public static Container FieldAddress(FieldInfo fieldInfo)
 	{
-		Guard.IsNotNull(fieldInfo);
+		if (fieldInfo is null) throw new ArgumentNullException();
 
 		return new(fieldInfo.IsStatic ? OpCodes.Ldsflda : OpCodes.Ldflda, fieldInfo);
 	}
@@ -962,13 +964,13 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container StoreField(Type type, string name)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		var field = AccessTools.Field(type, name);
 		return field != null
 			? new(field.IsStatic ? OpCodes.Stsfld : OpCodes.Stfld, field)
-			: ThrowHelper.ThrowMissingFieldException<Container>(
+			: throw new MissingFieldException(
 				$"FishTranspiler.StoreField failed to find a field at {type.FullDescription()}:{name}");
 	}
 
@@ -980,7 +982,7 @@ public static class FishTranspiler
 	/// <param name="fieldInfo">The FieldInfo</param>
 	public static Container StoreField(FieldInfo fieldInfo)
 	{
-		Guard.IsNotNull(fieldInfo);
+		if (fieldInfo is null) throw new ArgumentNullException();
 
 		return new(fieldInfo.IsStatic ? OpCodes.Stsfld : OpCodes.Stfld, fieldInfo);
 	}
@@ -1011,13 +1013,13 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container PropertyGetter(Type type, string name, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		var method = AccessTools.PropertyGetter(type, name);
 		return method != null
 			? Call(method, forceNoCallvirt)
-			: ThrowHelper.ThrowMissingMethodException<Container>(
+			: throw new MissingMethodException(
 				$"FishTranspiler.CallPropertyGetter failed to find a property getter at {
 					type.FullDescription()}:{name}");
 	}
@@ -1030,12 +1032,12 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">No property getter found for the specified property info</exception>
 	public static Container PropertyGetter(PropertyInfo propertyInfo, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(propertyInfo);
+		if (propertyInfo is null) throw new ArgumentNullException();
 
 		var method = propertyInfo.GetMethod;
 		return method != null
 			? Call(method, forceNoCallvirt)
-			: ThrowHelper.ThrowMissingMethodException<Container>(
+			: throw new MissingMethodException(
 				$"FishTranspiler.CallPropertyGetter failed to find a property getter at {
 					propertyInfo.DeclaringType.FullDescription()}:{propertyInfo.Name}");
 	}
@@ -1050,13 +1052,13 @@ public static class FishTranspiler
 	[SecuritySafeCritical]
 	public static Container PropertySetter(Type type, string name, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(type);
-		Guard.IsNotNullOrEmpty(name);
+		if (type is null) throw new ArgumentNullException();
+		if (string.IsNullOrEmpty(name)) throw new ArgumentNullException();
 
 		var method = AccessTools.PropertySetter(type, name);
 		return method != null
 			? Call(method, forceNoCallvirt)
-			: ThrowHelper.ThrowMissingMethodException<Container>(
+			: throw new MissingMethodException(
 				$"FishTranspiler.CallPropertySetter failed to find a property setter at {
 					type.FullDescription()}:{name}");
 	}
@@ -1069,12 +1071,12 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">No property setter found for the specified property info</exception>
 	public static Container PropertySetter(PropertyInfo propertyInfo, bool forceNoCallvirt = false)
 	{
-		Guard.IsNotNull(propertyInfo);
+		if (propertyInfo is null) throw new ArgumentNullException();
 
 		var method = propertyInfo.SetMethod;
 		return method != null
 			? Call(method, forceNoCallvirt)
-			: ThrowHelper.ThrowMissingMethodException<Container>(
+			: throw new MissingMethodException(
 				$"FishTranspiler.CallPropertySetter failed to find a property setter at {
 					propertyInfo.DeclaringType.FullDescription()}:{propertyInfo.Name}");
 	}
@@ -1091,7 +1093,7 @@ public static class FishTranspiler
 	/// <param name="type">The type to constrain to</param>
 	public static Container Constrained(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Constrained, type);
 	}
@@ -1112,7 +1114,7 @@ public static class FishTranspiler
 	/// <param name="parameters">An optional array of parameter types to specify the desired constructor overload</param>
 	public static Container New(Type type, Type[]? parameters = null)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return typeof(Array).IsAssignableFrom(type)
 			? new(OpCodes.Newarr, type.GetElementType())
@@ -1132,7 +1134,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">ConstructorInfo is null</exception>
 	public static Container New(ConstructorInfo constructor)
 	{
-		Guard.IsNotNull(constructor);
+		if (constructor is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Newobj, constructor);
 	}
@@ -1144,7 +1146,7 @@ public static class FishTranspiler
 	[SuppressMessage("Naming", "CA1720")]
 	public static Container String(string text)
 	{
-		Guard.IsNotNull(text);
+		if (text is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Ldstr, text);
 	}
@@ -1363,8 +1365,8 @@ public static class FishTranspiler
 	/// </summary>
 	public static Container Switch(params Label[] labels)
 	{
-		Guard.IsNotNull(labels);
-		Guard.HasSizeGreaterThan(labels, 0);
+		if (labels is null) throw new ArgumentNullException();
+		if(labels.Length == 0) throw new ArgumentException($"Parameter labels (string) must have a size over 0, had a size of {labels.Length}.");
 
 		return new(OpCodes.Switch, labels);
 	}
@@ -1439,11 +1441,11 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">type is not a ValueType</exception>
 	public static Container LoadObject(Type type)
 	{
-		Guard.IsNotNull(type, nameof(type));
+		if (type is null) throw new ArgumentNullException(nameof(type));
 
 		return type.IsValueType
 			? new(OpCodes.Ldobj, type)
-			: ThrowHelper.ThrowArgumentException<Container>(
+			: throw new ArgumentException(
 				$"Type ({type}) for FishTranspiler.LoadObject must be a ValueType. Use LoadByRef or "
 				+ "LoadIndirectly for primitive and reference types.",
 				nameof(type));
@@ -1465,11 +1467,11 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">type is not a ValueType</exception>
 	public static Container StoreObject(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return type.IsValueType
 			? new(OpCodes.Stobj, type)
-			: ThrowHelper.ThrowArgumentException<Container>(
+			: throw new ArgumentException(
 				$"Type ({type}) for FishTranspiler.StoreObject must be a ValueType. Use StoreByRef or "
 				+ "StoreIndirectly for primitive and reference types.",
 				nameof(type));
@@ -1489,11 +1491,11 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">type is not a ValueType</exception>
 	public static Container Box(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return type.IsValueType
 			? new(OpCodes.Box, type)
-			: ThrowHelper.ThrowArgumentException<Container>(
+			: throw new ArgumentException(
 				$"Type ({type}) for FishTranspiler.Box must be a ValueType.", nameof(type));
 	}
 
@@ -1513,11 +1515,11 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">type is not a ValueType</exception>
 	public static Container UnboxAddress(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return type.IsValueType
 			? new(OpCodes.Unbox, type)
-			: ThrowHelper.ThrowArgumentException<Container>(
+			: throw new ArgumentException(
 				$"Type ({type}) for FishTranspiler.UnboxAddress must be a ValueType.", nameof(type));
 	}
 
@@ -1554,7 +1556,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">type is null</exception>
 	public static Container UnboxValue(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Unbox_Any, type);
 	}
@@ -1738,7 +1740,7 @@ public static class FishTranspiler
 	/// <param name="type">The type of the value</param>
 	public static Container CopyObject(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Cpobj, type);
 	}
@@ -1889,7 +1891,7 @@ public static class FishTranspiler
 	/// <param name="type">The element's type</param>
 	public static Container LoadElementAddress(Type type)
 	{
-		Guard.IsNotNull(type, nameof(type));
+		if (type is null) throw new ArgumentNullException(nameof(type));
 
 		return new(OpCodes.Ldelema, type);
 	}
@@ -1908,7 +1910,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">memberInfo is null</exception>
 	public static Container Token(MemberInfo memberInfo)
 	{
-		Guard.IsNotNull(memberInfo, nameof(memberInfo));
+		if (memberInfo is null) throw new ArgumentNullException(nameof(memberInfo));
 
 		return new(OpCodes.Ldtoken, memberInfo);
 	}
@@ -1928,7 +1930,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">type is null</exception>
 	public static Container Cast(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return type.IsValueType
 			? Convert(type)
@@ -1948,7 +1950,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">type is null</exception>
 	public static Container As(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Isinst, type);
 	}
@@ -1968,7 +1970,7 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentNullException">type is null</exception>
 	public static Container IsInstance(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(OpCodes.Isinst, type);
 	}
@@ -1986,13 +1988,13 @@ public static class FishTranspiler
 	/// <exception cref="ArgumentException">Convert expects a non-character primitive type</exception>
 	public static Container Convert(Type type)
 	{
-		Guard.IsNotNull(type, nameof(type));
+		if (type is null) throw new ArgumentNullException(nameof(type));
 
 		return new(!type.IsPrimitive || type == typeof(char)
-			? ThrowHelper.ThrowArgumentException<OpCode>("Convert expects a non-character primitive type", nameof(type))
+			? throw new ArgumentException("Convert expects a non-character primitive type", nameof(type))
 			: ConvertOpCodesByType.TryGetValue(type, out var value)
 				? value
-				: ThrowHelper.ThrowArgumentException<OpCode>($"Type {type.FullDescription()} cannot be converted to"));
+				: throw new ArgumentException($"Type {type.FullDescription()} cannot be converted to"));
 	}
 
 	public static readonly Dictionary<Type, OpCode> ConvertOpCodesByType = new()
@@ -2033,20 +2035,20 @@ public static class FishTranspiler
 	/// <exception cref="InvalidOperationException">float and double cannot be converted to with overflow checking</exception>
 	public static Container ConvertWithOverflowCheck(Type type)
 	{
-		Guard.IsNotNull(type);
+		if (type is null) throw new ArgumentNullException();
 
 		return new(!type.IsPrimitive || type == typeof(char)
-			? ThrowHelper.ThrowArgumentException<OpCode>(
+			? throw new ArgumentException(
 				"ConvertWithOverflowCheck expects a non-character primitive type")
 			: type == typeof(float)
-				? ThrowHelper.ThrowInvalidOperationException<OpCode>(
+				? throw new InvalidOperationException(
 					"There is no operation for converting to a float with overflow checking")
 				: type == typeof(double)
-					? ThrowHelper.ThrowInvalidOperationException<OpCode>(
+					? throw new InvalidOperationException(
 						"There is no operation for converting to a double with overflow checking")
 					: ConvertWithOverflowCheckOpCodesByType.TryGetValue(type, out var value)
 						? value
-						: ThrowHelper.ThrowArgumentException<OpCode>(
+						: throw new ArgumentException(
 							$"Type {type.FullDescription()} cannot be converted to"));
 	}
 
@@ -2081,20 +2083,20 @@ public static class FishTranspiler
 	/// <exception cref="InvalidOperationException">float and double cannot be converted to with overflow checking</exception>
 	public static Container ConvertUnsignedWithOverflowCheck(Type type)
 	{
-		Guard.IsNotNull(type, nameof(type));
+		if (type is null) throw new ArgumentNullException(nameof(type));
 
 		return new(!type.IsPrimitive || type == typeof(char)
-			? ThrowHelper.ThrowArgumentException<OpCode>(
+			? throw new ArgumentException(
 				"ConvertUnsignedWithOverflowCheck expects a non-character primitive type")
 			: type == typeof(float)
-				? ThrowHelper.ThrowInvalidOperationException<OpCode>(
+				? throw new InvalidOperationException(
 					"There is no operation for converting to a float with overflow checking")
 				: type == typeof(double)
-					? ThrowHelper.ThrowInvalidOperationException<OpCode>(
+					? throw new InvalidOperationException(
 						"There is no operation for converting to a double with overflow checking")
 					: ConvertUnsignedWithOverflowCheckOpCodesByType.TryGetValue(type, out var value)
 						? value
-						: ThrowHelper.ThrowArgumentException<OpCode>(
+						: throw new ArgumentException(
 							$"Type {type.FullDescription()} cannot be converted to"));
 	}
 
@@ -2125,8 +2127,8 @@ public static class FishTranspiler
 
 	public static int FirstArgumentIndex(MethodBase method, Type argumentType)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(argumentType);
+		if (method is null) throw new ArgumentNullException();
+		if (argumentType is null) throw new ArgumentNullException();
 
 		return !method.IsStatic && method.DeclaringType == argumentType
 			? 0
@@ -2135,20 +2137,20 @@ public static class FishTranspiler
 
 	public static int FirstArgumentIndex(MethodBase method, Func<ParameterInfo, bool> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		var argument = method.GetParameters().FirstOrDefault(predicate);
 
 		return argument != null
 			? ArgumentIndex(argument)
-			: ThrowHelper.ThrowInvalidOperationException<int>(
+			: throw new InvalidOperationException(
 				$"No argument found for predicate {predicate.Method.FullDescription()} and method {method.FullDescription()}");
 	}
 
 	public static int ArgumentIndex(ParameterInfo parameter)
 	{
-		Guard.IsNotNull(parameter);
+		if (parameter is null) throw new ArgumentNullException();
 
 		return parameter.Position + (((MethodBase)parameter.Member).IsStatic ? 0 : 1);
 	}
@@ -2156,8 +2158,8 @@ public static class FishTranspiler
 	public static IEnumerable<object> GetLocalOperandsOrIndices(CodeInstructions codes,
 		Predicate<CodeInstruction> predicate)
 	{
-		Guard.IsNotNull(codes);
-		Guard.IsNotNull(predicate);
+		if (codes is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		CodeInstruction? previousCode = null;
 		foreach (var code in codes)
@@ -2166,7 +2168,7 @@ public static class FishTranspiler
 			{
 				yield return opcode.TryGetIndex()
 					?? TryGetIndexFromOperand(code.operand)
-					?? ThrowHelper.ThrowNotSupportedException<object>(
+					?? throw new NotSupportedException(
 						$"{code.opcode} returned {code.operand?.ToString() ?? "null"}.");
 			}
 
@@ -2176,8 +2178,8 @@ public static class FishTranspiler
 
 	public static IEnumerable<int> GetLocalIndices(CodeInstructions codes, Predicate<CodeInstruction> predicate)
 	{
-		Guard.IsNotNull(codes);
-		Guard.IsNotNull(predicate);
+		if (codes is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		foreach (var operand in GetLocalOperandsOrIndices(codes, predicate))
 			yield return (int)operand;
@@ -2185,12 +2187,12 @@ public static class FishTranspiler
 
 	public static IEnumerable<int> GetLocalIndices(MethodBase method, Predicate<LocalVariableInfo> predicate)
 	{
-		Guard.IsNotNull(method);
-		Guard.IsNotNull(predicate);
+		if (method is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
 
 		var methodBody = method.GetMethodBody();
 		if (methodBody is null)
-			ThrowHelper.ThrowArgumentException($"Method {method.FullDescription()} has no body");
+			throw new ArgumentException($"Method {method.FullDescription()} has no body");
 
 		var variables = methodBody.LocalVariables;
 		for (var i = 0; i < variables.Count; i++)
@@ -2203,9 +2205,9 @@ public static class FishTranspiler
 	public static CodeInstructions MethodReplacer<TFrom, TTo>(this CodeInstructions instructions, TFrom from, TTo to,
 		bool throwOnFailure = true) where TFrom : Delegate where TTo : Delegate
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(from);
-		Guard.IsNotNull(to);
+		if (instructions is null) throw new ArgumentNullException();
+		if (from is null) throw new ArgumentNullException();
+		if (to is null) throw new ArgumentNullException();
 
 		var success = false;
 		foreach (var instruction in instructions)
@@ -2220,21 +2222,20 @@ public static class FishTranspiler
 			yield return instruction;
 		}
 
-		if (throwOnFailure && !success)
-		{
-			ThrowHelper.ThrowInvalidOperationException(
-				$"FishTranspiler.MethodReplacer couldn't find method {to.Method.FullDescription()} for {
-					UtilityF.GetCallingAssembly().GetName().Name}, Version {
-						UtilityF.GetCallingAssembly().GetName().Version}");
+		if (throwOnFailure && !success) {
+			string? message = $"FishTranspiler.MethodReplacer couldn't find method {to.Method.FullDescription()} for {
+				UtilityF.GetCallingAssembly().GetName().Name}, Version {
+					UtilityF.GetCallingAssembly().GetName().Version}";
+			throw new InvalidOperationException(message);
 		}
 	}
 
 	public static CodeInstructions InsertBefore(this CodeInstructions instructions,
 		Predicate<CodeInstruction> predicate, CodeInstruction instructionToInsert, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		Guard.IsNotNull(instructionToInsert);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (instructionToInsert is null) throw new ArgumentNullException();
 
 		return instructions.InsertBefore(predicate, new[] { instructionToInsert }, throwOnFailure);
 	}
@@ -2242,9 +2243,9 @@ public static class FishTranspiler
 	public static CodeInstructions InsertBefore(this CodeInstructions instructions,
 		Predicate<CodeInstruction> predicate, CodeInstructions instructionsToInsert, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		UtilityF.ThrowIfNullOrEmpty(instructionsToInsert);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (!instructionsToInsert.Any()) throw new ArgumentNullException(nameof(instructionsToInsert), "Sequence contains no elements");
 
 		var success = false;
 		foreach (var code in instructions)
@@ -2260,21 +2261,20 @@ public static class FishTranspiler
 			yield return code;
 		}
 
-		if (throwOnFailure && !success)
-		{
-			ThrowHelper.ThrowInvalidOperationException(
-				$"FishTranspiler.InsertBefore couldn't find target instruction for {
-					predicate.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
-						UtilityF.GetCallingAssembly().GetName().Version}");
+		if (throwOnFailure && !success) {
+			string? message = $"FishTranspiler.InsertBefore couldn't find target instruction for {
+				predicate.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
+					UtilityF.GetCallingAssembly().GetName().Version}";
+			throw new InvalidOperationException(message);
 		}
 	}
 
 	public static CodeInstructions InsertAfter(this CodeInstructions instructions, Predicate<CodeInstruction> predicate,
 		CodeInstruction instructionToInsert, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		Guard.IsNotNull(instructionToInsert);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (instructionToInsert is null) throw new ArgumentNullException();
 
 		return instructions.InsertAfter(predicate, new[] { instructionToInsert }, throwOnFailure);
 	}
@@ -2282,9 +2282,9 @@ public static class FishTranspiler
 	public static CodeInstructions InsertAfter(this CodeInstructions instructions, Predicate<CodeInstruction> predicate,
 		CodeInstructions instructionsToInsert, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		UtilityF.ThrowIfNullOrEmpty(instructionsToInsert);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (!instructionsToInsert.Any()) throw new ArgumentNullException(nameof(instructionsToInsert), "Sequence contains no elements");
 
 		var success = false;
 		foreach (var code in instructions)
@@ -2300,21 +2300,20 @@ public static class FishTranspiler
 			success = true;
 		}
 
-		if (throwOnFailure && !success)
-		{
-			ThrowHelper.ThrowInvalidOperationException(
-				$"FishTranspiler.InsertAfter couldn't find target instruction for {
-					predicate.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
-						UtilityF.GetCallingAssembly().GetName().Version}");
+		if (throwOnFailure && !success) {
+			string? message = $"FishTranspiler.InsertAfter couldn't find target instruction for {
+				predicate.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
+					UtilityF.GetCallingAssembly().GetName().Version}";
+			throw new InvalidOperationException(message);
 		}
 	}
 
 	public static CodeInstructions Replace(this CodeInstructions instructions, Predicate<CodeInstruction> predicate,
 		Func<CodeInstruction, CodeInstruction> replacement, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		Guard.IsNotNull(replacement);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (replacement is null) throw new ArgumentNullException();
 
 		return instructions.Replace(predicate, c => new[] { replacement(c) }, throwOnFailure);
 	}
@@ -2322,9 +2321,9 @@ public static class FishTranspiler
 	public static CodeInstructions Replace(this CodeInstructions instructions, Predicate<CodeInstruction> predicate,
 		Func<CodeInstruction, CodeInstructions> replacement, bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(predicate);
-		Guard.IsNotNull(replacement);
+		if (instructions is null) throw new ArgumentNullException();
+		if (predicate is null) throw new ArgumentNullException();
+		if (replacement is null) throw new ArgumentNullException();
 
 		var success = false;
 		foreach (var code in instructions)
@@ -2340,11 +2339,11 @@ public static class FishTranspiler
 				yield return code;
 		}
 
-		if (throwOnFailure && !success)
-		{
-			ThrowHelper.ThrowInvalidOperationException($"FishTranspiler.Replace couldn't find target instruction for {
+		if (throwOnFailure && !success) {
+			string? message = $"FishTranspiler.Replace couldn't find target instruction for {
 				predicate.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
-					UtilityF.GetCallingAssembly().GetName().Version}");
+					UtilityF.GetCallingAssembly().GetName().Version}";
+			throw new InvalidOperationException(message);
 		}
 	}
 
@@ -2352,9 +2351,9 @@ public static class FishTranspiler
 		Func<List<CodeInstruction>, int, bool> position, Func<CodeInstruction, CodeInstruction> replacement,
 		bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(position);
-		Guard.IsNotNull(replacement);
+		if (instructions is null) throw new ArgumentNullException();
+		if (position is null) throw new ArgumentNullException();
+		if (replacement is null) throw new ArgumentNullException();
 
 		return instructions.ReplaceAt(position, c => new[] { replacement(c) }, throwOnFailure);
 	}
@@ -2363,9 +2362,9 @@ public static class FishTranspiler
 		Func<List<CodeInstruction>, int, bool> position, Func<CodeInstruction, CodeInstructions> replacement,
 		bool throwOnFailure = true)
 	{
-		Guard.IsNotNull(instructions);
-		Guard.IsNotNull(position);
-		Guard.IsNotNull(replacement);
+		if (instructions is null) throw new ArgumentNullException();
+		if (position is null) throw new ArgumentNullException();
+		if (replacement is null) throw new ArgumentNullException();
 
 		var success = false;
 		var codes = instructions as List<CodeInstruction> ?? instructions.ToList();
@@ -2383,11 +2382,11 @@ public static class FishTranspiler
 			success = true;
 		}
 
-		if (throwOnFailure && !success)
-		{
-			ThrowHelper.ThrowInvalidOperationException($"FishTranspiler.ReplaceAt couldn't find target instruction for {
+		if (throwOnFailure && !success) {
+			string? message = $"FishTranspiler.ReplaceAt couldn't find target instruction for {
 				position.Method.FullDescription()} of {UtilityF.GetCallingAssembly().GetName().Name}, Version {
-					UtilityF.GetCallingAssembly().GetName().Version}");
+					UtilityF.GetCallingAssembly().GetName().Version}";
+			throw new InvalidOperationException(message);
 		}
 
 		return codes;
@@ -2396,7 +2395,7 @@ public static class FishTranspiler
 	public static CodeInstruction With(this CodeInstruction instruction, OpCode? opcode = null, object? operand = null,
 		IEnumerable<Label>? labels = null, IEnumerable<ExceptionBlock>? blocks = null)
 	{
-		Guard.IsNotNull(instruction);
+		if (instruction is null) throw new ArgumentNullException();
 
 		if (opcode != null)
 			instruction.opcode = opcode.Value;
@@ -2426,7 +2425,7 @@ public static class FishTranspiler
 			: opcode.TryGetIndex() is { } index ? GetLoadLocalOpCode(index)
 			: opcode == OpCodes.Stloc_S ? OpCodes.Ldloc_S
 			: opcode == OpCodes.Stloc ? OpCodes.Ldloc
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Ldloc.");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Ldloc.");
 
 	public static bool StoresLocalVariable(this OpCode opcode) => StoreLocalVariableOpCodes.Contains(opcode);
 
@@ -2440,7 +2439,7 @@ public static class FishTranspiler
 			: opcode.TryGetIndex() is { } index ? GetStoreLocalOpCode(index)
 			: opcode == OpCodes.Ldloc_S ? OpCodes.Stloc_S
 			: opcode == OpCodes.Ldloc ? OpCodes.Stloc
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Stloc");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Stloc");
 
 	public static bool LoadsElement(this OpCode opcode) => LoadElementOpCodes.Contains(opcode);
 
@@ -2485,7 +2484,7 @@ public static class FishTranspiler
 		=> opcode.LoadsField() ? opcode
 			: opcode == OpCodes.Stfld ? OpCodes.Ldfld
 			: opcode == OpCodes.Stsfld ? OpCodes.Ldsfld
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Ldfld");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Ldfld");
 
 	public static bool StoresField(this OpCode opcode) => opcode.StoresStaticField() || opcode.StoresInstanceField();
 
@@ -2497,7 +2496,7 @@ public static class FishTranspiler
 		=> opcode.StoresField() ? opcode
 			: opcode == OpCodes.Ldfld ? OpCodes.Stfld
 			: opcode == OpCodes.Ldsfld ? OpCodes.Stsfld
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Stfld");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Stfld");
 
 	public static bool Calls(this OpCode opcode)
 		=> opcode == OpCodes.Call
@@ -2566,14 +2565,14 @@ public static class FishTranspiler
 			: opcode.TryGetIndex() is { } index ? GetStoreArgumentOpCode(index)
 			: opcode == OpCodes.Ldarg_S || opcode == OpCodes.Ldarga_S ? OpCodes.Starg_S
 			: opcode == OpCodes.Ldarg || opcode == OpCodes.Ldarga ? OpCodes.Starg
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Starg");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Starg");
 
 	public static OpCode ToLoadArgument(this OpCode opcode)
 		=> opcode.LoadsArgument() && opcode != OpCodes.Ldarga && opcode != OpCodes.Ldarga_S ? opcode
 			: opcode.TryGetIndex() is { } index ? GetLoadArgumentOpCode(index)
 			: opcode == OpCodes.Starg_S ? OpCodes.Ldarg_S
 			: opcode == OpCodes.Starg ? OpCodes.Ldarg
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"{opcode} cannot be cast to Ldarg");
+			: throw new InvalidOperationException($"{opcode} cannot be cast to Ldarg");
 
 	public static OpCode GetLoadArgumentOpCode(int index)
 		=> index switch
@@ -2661,7 +2660,7 @@ public static class FishTranspiler
 			: opcode == OpCodes.Ldloc ? OpCodes.Ldloca
 			: opcode == OpCodes.Ldfld ? OpCodes.Ldflda
 			: opcode == OpCodes.Ldsfld ? OpCodes.Ldsflda
-			: ThrowHelper.ThrowInvalidOperationException<OpCode>($"Cannot cast {opcode} to address opcode");
+			: throw new InvalidOperationException($"Cannot cast {opcode} to address opcode");
 
 	public static int? TryGetIndex(this OpCode opcode)
 		=> _opCodeIndices.TryGetValue(opcode, out var value) ? value : null;
@@ -2699,7 +2698,7 @@ public static class FishTranspiler
 
 	public static object? GetOperandFromBuilder(LocalBuilder builder)
 	{
-		Guard.IsNotNull(builder);
+		if (builder is null) throw new ArgumentNullException();
 
 		return builder.LocalIndex > 3 ? builder : null;
 	}
@@ -2708,7 +2707,7 @@ public static class FishTranspiler
 	{
 		var methodBody = method.GetMethodBody();
 		if (methodBody is null)
-			ThrowHelper.ThrowArgumentException($"Method {method.FullDescription()} has no body.");
+			throw new ArgumentException($"Method {method.FullDescription()} has no body.");
 
 		return methodBody.LocalVariables;
 	}
@@ -2729,7 +2728,7 @@ public static class FishTranspiler
 
 	public static void Emit(this ILGenerator generator, Container fishTranspiler)
 	{
-		Guard.IsNotNull(generator);
+		if (generator is null) throw new ArgumentNullException();
 
 		switch (fishTranspiler.Operand)
 		{
@@ -2788,9 +2787,8 @@ public static class FishTranspiler
 				generator.Emit(fishTranspiler.OpCode, localInfo.LocalIndex);
 				break;
 			default:
-				ThrowHelper.ThrowArgumentException(
+				throw new ArgumentException(
 					$"Invalid FishTranspiler operand for Emit method: {fishTranspiler.Operand}");
-				break;
 		}
 	}
 }
